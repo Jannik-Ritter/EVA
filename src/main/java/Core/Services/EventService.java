@@ -9,57 +9,53 @@ import Core.Models.Event;
 
 public class EventService implements EventServiceInterface {
 
-    //TODO variable to store events
+    private ConcurrentHashMap<UUID, Event> events = new ConcurrentHashMap<>();
 
     public Event createEvent(String name, String location, LocalDateTime time, int ticketsAvailable) throws EventException {
+        UUID id = UUID.randomUUID();
+        Event newEvent = new Event(id, name, location, time, ticketsAvailable);
 
-        //TODO
-
-        return null;
+        events.put(id, newEvent);
+        return newEvent;
     }
 
     @Override
     public Event getEventById(UUID id) {
-
-        //TODO
-
-        return null;
+        return events.get(id);
     }
 
     @Override
     public void updateEvent(Event event) throws EventException {
-
-        //TODO
-
+        try{
+            UUID id = event.getId();
+            events.put(id, event);
+            validateUpdatedEvent(event);
+        } catch (EventException e) {
+            throw e;
+        }
     }
 
-    private void validateUpdatedEvent(Event event){
-
-        //TODO
-
+    private void validateUpdatedEvent(Event event) throws EventException {
+        boolean doesExist = events.containsKey(event.getId());
+        if (!doesExist) {
+            EventException.eventDoesNotExist();
+        }
     }
 
 
     @Override
     public void deleteEvent(UUID id) {
-
-        //TODO
-
+        events.remove(id);
     }
 
     @Override
     public List<Event> getAllEvents() {
-
-        //TODO
-
-        return null;
+        return new ArrayList<>(events.values());
     }
 
     @Override
     public void deleteAllEvents() {
-
-        //TODO
-
+        events.clear();
     }
 
 
