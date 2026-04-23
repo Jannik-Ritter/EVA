@@ -20,7 +20,7 @@ public class Event {
         String name,
         String location,
         LocalDateTime time,
-        int ticketsAvailable
+        final int ticketsAvailable
     ) {
         this.id = id;
         this.name = name;

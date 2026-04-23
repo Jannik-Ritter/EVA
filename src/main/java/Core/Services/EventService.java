@@ -11,13 +11,12 @@ public class EventService implements EventServiceInterface {
 
     private ConcurrentHashMap<UUID, Event> events = new ConcurrentHashMap<>();
 
-    public Event createEvent(String name, String location, LocalDateTime time, int ticketsAvailable) throws EventException {
+    public Event createEvent(String name, String location, LocalDateTime time, final int ticketsAvailable) throws EventException {
         UUID id = UUID.randomUUID();
-        final Event publicEvent = new Event(id, name, location, time, ticketsAvailable);
-        final Event internalEvent = new Event(id, name, location, time, ticketsAvailable);
+        final Event newEvent = new Event(id, name, location, time, ticketsAvailable);
 
-        events.put(id, internalEvent);
-        return publicEvent;
+        events.put(id, newEvent);
+        return getEventById(id);
     }
 
     @Override
@@ -25,7 +24,10 @@ public class EventService implements EventServiceInterface {
         if (events.containsKey(id) == false) {
             throw EventException.eventDoesNotExist();
         }
-        return events.get(id);
+
+        Event event = events.get(id);
+        Event reflectedEvent = new Event(id, event.getName(), event.getLocation(), event.getTime(), event.getTicketsAvailable().get());
+        return reflectedEvent;
     }
 
     @Override
