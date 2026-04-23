@@ -13,26 +13,38 @@ public class EventService implements EventServiceInterface {
 
     public Event createEvent(String name, String location, LocalDateTime time, int ticketsAvailable) throws EventException {
         UUID id = UUID.randomUUID();
-        Event newEvent = new Event(id, name, location, time, ticketsAvailable);
+        final Event publicEvent = new Event(id, name, location, time, ticketsAvailable);
+        final Event internalEvent = new Event(id, name, location, time, ticketsAvailable);
 
-        events.put(id, newEvent);
-        return newEvent;
+        events.put(id, internalEvent);
+        return publicEvent;
     }
 
     @Override
-    public Event getEventById(UUID id) {
+    public Event getEventById(UUID id) throws EventException {
+        if (events.containsKey(id) == false) {
+            throw EventException.eventDoesNotExist();
+        }
         return events.get(id);
     }
 
     @Override
     public void updateEvent(Event event) throws EventException {
-        try{
-            UUID id = event.getId();
-            events.put(id, event);
-            validateUpdatedEvent(event);
-        } catch (EventException e) {
-            throw e;
+        UUID id = event.getId();
+        if (!events.containsKey(id)) {
+            throw EventException.eventDoesNotExist();
         }
+
+        if (event.getTime().isBefore(LocalDateTime.now())) {
+            throw EventException.cantSetEventTimeIntoPast();
+        }
+
+        if (event.getTicketsAvailable().get() < events.get(id).getTicketsAvailable().get()) {
+            throw EventException.shouldNotReduceAvailableTicketsWithUpdate();
+        }
+
+        events.put(id, event);
+        validateUpdatedEvent(event);
     }
 
     private void validateUpdatedEvent(Event event) throws EventException {
