@@ -14,6 +14,7 @@ public class Event {
     private String location;
     private LocalDateTime time;
     private AtomicInteger ticketsAvailable;
+    private List<UUID> ticketsSold;
 
     public Event(
         UUID id,
@@ -22,11 +23,23 @@ public class Event {
         LocalDateTime time,
         final int ticketsAvailable
     ) {
+        this(id, name, location, time, ticketsAvailable, new ArrayList<UUID>());
+    }
+
+    public Event(
+        UUID id,
+        String name,
+        String location,
+        LocalDateTime time,
+        final int ticketsAvailable,
+        List<UUID> ticketsSold
+    ) {
         this.id = id;
         this.name = name;
         this.location = location;
         this.time = time;
         this.ticketsAvailable = new AtomicInteger(ticketsAvailable);
+        this.ticketsSold = new ArrayList<UUID>(ticketsSold);
     }
 
     public UUID getId() {
@@ -45,6 +58,10 @@ public class Event {
         return time;
     }
 
+    public List<UUID> getTicketsSold() {
+        return ticketsSold;
+    }
+
     public AtomicInteger getTicketsAvailable() {
         return ticketsAvailable;
     }
@@ -61,8 +78,20 @@ public class Event {
         this.time = time;
     }
 
+    public void addTicketSold(UUID ticketId) {
+        ticketsSold.add(ticketId);
+    }
+
+    public void removeTicketSold(UUID ticketId) {
+        ticketsSold.remove(ticketId);
+    }
+
     public void setTicketsAvailable(int ticketsAvailable) {
         this.ticketsAvailable = new AtomicInteger(ticketsAvailable);
+    }
+
+    public int updateTicketsAvailable(int delta) {
+        return this.ticketsAvailable.addAndGet(delta);
     }
 
     public boolean hasAvailableTickets() {

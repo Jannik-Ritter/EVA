@@ -8,9 +8,20 @@ import java.util.concurrent.ConcurrentHashMap;
 import Core.Models.Event;
 
 public class EventService implements EventServiceInterface {
-
     private ConcurrentHashMap<UUID, Event> events = new ConcurrentHashMap<>();
+    private TicketService ticketService;
 
+    public EventService() {
+        this.ticketService = new TicketService();
+    }
+
+    public EventService(TicketService ticketService) {
+        setTicketService(ticketService);
+    }
+
+    public void setTicketService(TicketService ticketService) {
+        this.ticketService = ticketService;
+    }
     public Event createEvent(String name, String location, LocalDateTime time, final int ticketsAvailable) throws EventException {
         UUID id = UUID.randomUUID();
         final Event newEvent = new Event(id, name, location, time, ticketsAvailable);
@@ -26,14 +37,25 @@ public class EventService implements EventServiceInterface {
         }
 
         Event event = events.get(id);
-        Event reflectedEvent = new Event(id, event.getName(), event.getLocation(), event.getTime(), event.getTicketsAvailable().get());
-        return reflectedEvent;
+        return new Event(
+            id,
+            event.getName(),
+            event.getLocation(),
+            event.getTime(),
+            event.getTicketsAvailable().get(),
+            event.getTicketsSold()
+        );
     }
 
     @Override
     public void updateEvent(Event event) throws EventException {
+        updateEvent(event, true);
+    }
+
+    private void updateEvent(Event event, boolean enforceTicketContingentGuard) throws EventException {
         UUID id = event.getId();
-        if (!events.containsKey(id)) {
+        Event currentEvent = events.get(id);
+        if (currentEvent == null) {
             throw EventException.eventDoesNotExist();
         }
 
@@ -41,24 +63,24 @@ public class EventService implements EventServiceInterface {
             throw EventException.cantSetEventTimeIntoPast();
         }
 
-        if (event.getTicketsAvailable().get() < events.get(id).getTicketsAvailable().get()) {
+        if (
+            enforceTicketContingentGuard &&
+            event.getTicketsAvailable().get() < currentEvent.getTicketsAvailable().get()
+        ) {
             throw EventException.shouldNotReduceAvailableTicketsWithUpdate();
         }
 
         events.put(id, event);
-        validateUpdatedEvent(event);
-    }
-
-    private void validateUpdatedEvent(Event event) throws EventException {
-        boolean doesExist = events.containsKey(event.getId());
-        if (!doesExist) {
-            EventException.eventDoesNotExist();
-        }
     }
 
 
     @Override
     public void deleteEvent(UUID id) {
+        Event event = getEventById(id);
+        for (UUID ticketId : event.getTicketsSold()) {
+            ticketService.deleteTicket(ticketId);
+        }
+        
         events.remove(id);
     }
 
@@ -69,7 +91,27 @@ public class EventService implements EventServiceInterface {
 
     @Override
     public void deleteAllEvents() {
-        events.clear();
+        for (Event event : events.values()) {
+            deleteEvent(event.getId());
+        }
+    }
+
+    @Override
+    public void addTicketSold(UUID eventId, UUID ticketId) {
+        Event event = getEventById(eventId);
+        event.addTicketSold(ticketId);
+        event.updateTicketsAvailable(-1);
+
+        updateEvent(event, false);
+    }
+
+    @Override
+    public void removeTicketSold(UUID eventId, UUID ticketId) {
+        Event event = getEventById(eventId);
+        event.removeTicketSold(ticketId);
+        event.updateTicketsAvailable(1);
+
+        updateEvent(event, false);
     }
 
 

@@ -1,6 +1,8 @@
 package Core.Models;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 public class Customer {
@@ -8,12 +10,24 @@ public class Customer {
     private String username;
     private String email;
     private LocalDate dateOfBirth;
+    private List<UUID> ticketsBought;
 
     public Customer(UUID id, String username, String email, LocalDate dateOfBirth) {
+        this(id, username, email, dateOfBirth, new ArrayList<UUID>());
+    }
+
+    public Customer(
+        UUID id,
+        String username,
+        String email,
+        LocalDate dateOfBirth,
+        List<UUID> ticketsBought
+    ) {
         this.id = id;
         this.username = username;
         this.email = email;
         this.dateOfBirth = dateOfBirth;
+        this.ticketsBought = new ArrayList<UUID>(ticketsBought);
     }
 
     public UUID getId() {
@@ -32,6 +46,10 @@ public class Customer {
         return dateOfBirth;
     }
 
+    public List<UUID> getTicketsBought() {
+        return ticketsBought;
+    }
+
     public void setUsername(String username) {
         this.username = username;
     }
@@ -42,5 +60,13 @@ public class Customer {
 
     public void setDateOfBirth(LocalDate dateOfBirth) {
         this.dateOfBirth = dateOfBirth;
+    }
+
+    public void addTicketBought(UUID ticketId) {
+        ticketsBought.add(ticketId);
+    }
+
+    public void removeTicketBought(UUID ticketId) {
+        ticketsBought.remove(ticketId);
     }
 }

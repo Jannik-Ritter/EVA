@@ -11,6 +11,19 @@ import java.util.List;
 
 public class CustomerService implements CustomerServiceInterface {
     private ConcurrentHashMap<UUID, Customer> customers = new ConcurrentHashMap<>();
+    private TicketService ticketService;
+
+    public CustomerService() {
+        this.ticketService = new TicketService();
+    }
+
+    public CustomerService(TicketService ticketService) {
+        setTicketService(ticketService);
+    }
+
+    public void setTicketService(TicketService ticketService) {
+        this.ticketService = ticketService;
+    }
 
     private static void validateAdult(LocalDate dateOfBirth) {
         if (dateOfBirth.isAfter(LocalDate.now().minusYears(18))) {
@@ -55,8 +68,13 @@ public class CustomerService implements CustomerServiceInterface {
             throw CustomerException.customerDoesNotExist();
         }
         Customer customer = customers.get(id);
-        Customer reflectedCustomer = new Customer(id, customer.getUsername(), customer.getEmail(), customer.getDateOfBirth());
-        return reflectedCustomer;
+        return new Customer(
+            id,
+            customer.getUsername(),
+            customer.getEmail(),
+            customer.getDateOfBirth(),
+            customer.getTicketsBought()
+        );
     }
 
     @Override
@@ -75,6 +93,10 @@ public class CustomerService implements CustomerServiceInterface {
         if (!customers.containsKey(id)) {
             throw CustomerException.customerDoesNotExist();
         }
+        Customer customer = getCustomerById(id);
+        for (UUID ticketId : customer.getTicketsBought()) {
+            ticketService.deleteTicket(ticketId);
+        }
         customers.remove(id);
     }
     
@@ -86,6 +108,24 @@ public class CustomerService implements CustomerServiceInterface {
     
     @Override
     public void deleteAllCustomers() {
-        customers.clear();
+        for (Customer customer : customers.values()) {
+            deleteCustomer(customer.getId());
+        }
+    }
+
+    @Override
+    public void addTicketBought(UUID customerId, UUID ticketId) {
+        Customer customer = getCustomerById(customerId);
+        customer.addTicketBought(ticketId);
+
+        updateCustomer(customer);
+    }
+
+    @Override
+    public void removeTicketBought(UUID customerId, UUID ticketId) {
+        Customer customer = getCustomerById(customerId);
+        customer.removeTicketBought(ticketId);
+
+        updateCustomer(customer);
     }
 }
