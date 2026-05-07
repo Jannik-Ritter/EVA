@@ -9,40 +9,29 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 public class Event {
 
-    private final UUID id;
+    //private final UUID id;
+    private final long id;
     private String name;
     private String location;
     private LocalDateTime time;
     private AtomicInteger ticketsAvailable;
-    private List<UUID> ticketsSold;
+    private final List<Long> ticketsSold = new ArrayList<>();
 
     public Event(
-        UUID id,
+        long id,
         String name,
         String location,
         LocalDateTime time,
-        final int ticketsAvailable
-    ) {
-        this(id, name, location, time, ticketsAvailable, new ArrayList<UUID>());
-    }
-
-    public Event(
-        UUID id,
-        String name,
-        String location,
-        LocalDateTime time,
-        final int ticketsAvailable,
-        List<UUID> ticketsSold
+        int ticketsAvailable
     ) {
         this.id = id;
         this.name = name;
         this.location = location;
         this.time = time;
         this.ticketsAvailable = new AtomicInteger(ticketsAvailable);
-        this.ticketsSold = new ArrayList<UUID>(ticketsSold);
     }
 
-    public UUID getId() {
+    public long getId() {
         return id;
     }
 
@@ -58,12 +47,17 @@ public class Event {
         return time;
     }
 
-    public List<UUID> getTicketsSold() {
-        return ticketsSold;
+    public List<Long> getTicketsSold() {
+        return this.ticketsSold;
     }
 
     public AtomicInteger getTicketsAvailable() {
         return ticketsAvailable;
+    }
+
+    public void ticketDeleted(long ticketId) {
+        this.ticketsSold.remove(ticketId);
+        this.ticketsAvailable.addAndGet(1);
     }
 
     public void setName(String name) {
@@ -78,20 +72,12 @@ public class Event {
         this.time = time;
     }
 
-    public void addTicketSold(UUID ticketId) {
-        ticketsSold.add(ticketId);
-    }
-
-    public void removeTicketSold(UUID ticketId) {
-        ticketsSold.remove(ticketId);
-    }
-
     public void setTicketsAvailable(int ticketsAvailable) {
         this.ticketsAvailable = new AtomicInteger(ticketsAvailable);
     }
 
-    public int updateTicketsAvailable(int delta) {
-        return this.ticketsAvailable.addAndGet(delta);
+    public void addTicketToTicketsSold(long ticketId){
+        this.ticketsSold.add(ticketId);
     }
 
     public boolean hasAvailableTickets() {
@@ -100,7 +86,7 @@ public class Event {
 
     @Override
     public int hashCode(){
-        return Objects.hash(id, name, location, time, ticketsAvailable);
+        return Objects.hash(id, name, location, time, ticketsAvailable, ticketsSold);
     }
 
     @Override
@@ -108,11 +94,12 @@ public class Event {
         if (this == objectToCompare) return true;
         if(objectToCompare == null || getClass() != objectToCompare.getClass()) return false;
         Event eventToCompare = (Event) objectToCompare;
-        return eventToCompare.getId().equals(this.getId()) &&
+        return eventToCompare.getId() == this.getId() &&
                 eventToCompare.getName().equals(this.name) &&
                 eventToCompare.getLocation().equals(this.location) &&
                 eventToCompare.getTime().equals(this.time) &&
-                (eventToCompare.getTicketsAvailable().get() == this.ticketsAvailable.get());
+                (eventToCompare.getTicketsAvailable().get() == this.ticketsAvailable.get()) &&
+                eventToCompare.getTicketsSold().equals(this.ticketsSold);
     }
 
 }

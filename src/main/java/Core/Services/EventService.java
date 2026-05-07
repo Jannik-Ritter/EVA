@@ -4,115 +4,120 @@ import Core.Models.exceptions.EventException;
 import Core.Interfaces.EventServiceInterface;
 import java.time.LocalDateTime;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
 import Core.Models.Event;
+import Core.Models.Ticket;
+import IDGenerator.IDService.IDService;
+import IDGenerator.IDService.IDServiceInterface;
 
 public class EventService implements EventServiceInterface {
-    private ConcurrentHashMap<UUID, Event> events = new ConcurrentHashMap<>();
-    private TicketService ticketService;
 
-    public EventService() {
-        this.ticketService = new TicketService();
-    }
+    private final Map<Long, Event> eventsById = new HashMap<>();
+    private final TicketService ticketService;
+    private final IDServiceInterface idService;
 
-    public EventService(TicketService ticketService) {
-        setTicketService(ticketService);
-    }
-
-    public void setTicketService(TicketService ticketService) {
+    public EventService(TicketService ticketService, IDServiceInterface idService) {
         this.ticketService = ticketService;
+        this.idService = idService;
     }
-    public Event createEvent(String name, String location, LocalDateTime time, final int ticketsAvailable) throws EventException {
-        UUID id = UUID.randomUUID();
-        final Event newEvent = new Event(id, name, location, time, ticketsAvailable);
 
-        events.put(id, newEvent);
-        return getEventById(id);
+    public Event createEvent(
+        String name,
+        String location,
+        LocalDateTime time,
+        int ticketsAvailable
+    ) throws EventException {
+
+        Event event = new Event(
+            idService.getUnusedId(),
+            name,
+            location,
+            time,
+            ticketsAvailable
+        );
+
+        saveEvent(event);
+        return event;
+    }
+
+    public void ticketSoldForEvent(Ticket ticket) {
+        Event event = getEventById(ticket.getEventId());
+        event.getTicketsAvailable().decrementAndGet();
+        event.addTicketToTicketsSold(ticket.getId());
+        eventsById.put(event.getId(), event);
+    }
+
+    public void deleteTicketSoldForEvent(Ticket ticket){
+        Event event = getEventById(ticket.getEventId());
+        event.ticketDeleted(ticket.getId());
+        eventsById.put(event.getId(), event);
     }
 
     @Override
-    public Event getEventById(UUID id) throws EventException {
-        if (events.containsKey(id) == false) {
-            throw EventException.eventDoesNotExist();
-        }
-
-        Event event = events.get(id);
-        return new Event(
-            id,
-            event.getName(),
-            event.getLocation(),
-            event.getTime(),
-            event.getTicketsAvailable().get(),
-            event.getTicketsSold()
-        );
+    public Event getEventById(long id) {
+            if(id <= 0 || !eventsById.containsKey(id)){
+                throw EventException.eventDoesNotExist();
+            }
+        return clone(eventsById.get(id));
     }
 
     @Override
     public void updateEvent(Event event) throws EventException {
-        updateEvent(event, true);
+        validateUpdatedEvent(event);
+        saveEvent(event);
     }
 
-    private void updateEvent(Event event, boolean enforceTicketContingentGuard) throws EventException {
-        UUID id = event.getId();
-        Event currentEvent = events.get(id);
-        if (currentEvent == null) {
-            throw EventException.eventDoesNotExist();
-        }
-
-        if (event.getTime().isBefore(LocalDateTime.now())) {
-            throw EventException.cantSetEventTimeIntoPast();
-        }
-
-        if (
-            enforceTicketContingentGuard &&
-            event.getTicketsAvailable().get() < currentEvent.getTicketsAvailable().get()
-        ) {
+    private void validateUpdatedEvent(Event event){
+        Event eventBeforeUpdate = getEventById(event.getId());
+        if (event.getTicketsAvailable().get() < eventBeforeUpdate.getTicketsAvailable().get()) {
             throw EventException.shouldNotReduceAvailableTicketsWithUpdate();
         }
 
-        events.put(id, event);
+        if (!event.getTime().isAfter(LocalDateTime.now())) {
+            throw EventException.cantSetEventTimeIntoPast();
+        }
     }
 
 
     @Override
-    public void deleteEvent(UUID id) {
-        Event event = getEventById(id);
-        for (UUID ticketId : event.getTicketsSold()) {
-            ticketService.deleteTicket(ticketId);
+    public void deleteEvent(long id) {
+        Event deletedEvent = eventsById.remove(id);
+        if (deletedEvent != null) {
+            List<Long> ticketIds = new ArrayList<>(deletedEvent.getTicketsSold());
+            ticketIds.forEach(ticketService::deleteTicket);
         }
-        
-        events.remove(id);
     }
 
     @Override
     public List<Event> getAllEvents() {
-        return new ArrayList<>(events.values());
+        return new ArrayList<>(eventsById.values());
     }
 
     @Override
     public void deleteAllEvents() {
-        for (Event event : events.values()) {
-            deleteEvent(event.getId());
+        eventsById.clear();
+        ticketService.deleteAllTickets();
+    }
+
+    private void saveEvent(Event event) throws EventException{
+        validateEvent(event);
+        eventsById.put(event.getId(), clone(event));
+    }
+
+    private void validateEvent(Event event){
+        if (event.getTicketsAvailable().get() < 0) {
+            throw EventException.negativeTicketsAvailable();
         }
     }
 
-    @Override
-    public void addTicketSold(UUID eventId, UUID ticketId) {
-        Event event = getEventById(eventId);
-        event.addTicketSold(ticketId);
-        event.updateTicketsAvailable(-1);
-
-        updateEvent(event, false);
+    private Event clone(Event event){
+        Event clonedEvent = new Event(
+                event.getId(),
+                event.getName(),
+                event.getLocation(),
+                event.getTime(),
+                event.getTicketsAvailable().get()
+        );
+        clonedEvent.getTicketsSold().addAll(event.getTicketsSold());
+        return clonedEvent;
     }
-
-    @Override
-    public void removeTicketSold(UUID eventId, UUID ticketId) {
-        Event event = getEventById(eventId);
-        event.removeTicketSold(ticketId);
-        event.updateTicketsAvailable(1);
-
-        updateEvent(event, false);
-    }
-
-
 }

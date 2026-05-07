@@ -1,131 +1,113 @@
 package Core.Services;
 
-import Core.Interfaces.CustomerServiceInterface;
-import Core.Models.Customer;
 import Core.Models.exceptions.CustomerException;
-import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
+import Core.Interfaces.CustomerServiceInterface;
 import java.time.LocalDate;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
+import Core.Models.Customer;
+import Core.Models.Ticket;
+import IDGenerator.IDService.IDService;
+import IDGenerator.IDService.IDServiceInterface;
 
 public class CustomerService implements CustomerServiceInterface {
-    private ConcurrentHashMap<UUID, Customer> customers = new ConcurrentHashMap<>();
-    private TicketService ticketService;
 
-    public CustomerService() {
-        this.ticketService = new TicketService();
-    }
+    private final Map<Long, Customer> customersById = new HashMap<>();
+    private final TicketService ticketService;
+    private final IDServiceInterface idService;
 
-    public CustomerService(TicketService ticketService) {
-        setTicketService(ticketService);
-    }
-
-    public void setTicketService(TicketService ticketService) {
+    public CustomerService(TicketService ticketService, IDServiceInterface idService) {
         this.ticketService = ticketService;
+        this.idService = idService;
     }
 
-    private static void validateAdult(LocalDate dateOfBirth) {
-        if (dateOfBirth.isAfter(LocalDate.now().minusYears(18))) {
-            throw CustomerException.underageCustomer();
-        }
+    public Customer createCustomer(
+        String username,
+        String email,
+        LocalDate dateOfBirth
+    ) throws IllegalArgumentException {
+        long id = idService.getUnusedId();
+        Customer customer = new Customer(id, username, email, dateOfBirth);
+        saveCustomer(customer);
+
+        return customer;
     }
 
-    private static void validateEmail(String email) {
-        if (email == null) {
-            throw CustomerException.invalidEmail();
-        }
-        int at = email.indexOf('@');
-        if (at <= 0 || at == email.length() - 1) {
-            throw CustomerException.invalidEmail();
-        }
-        int atAmount = 0;
-        for (char c : email.toCharArray()) {
-            if (c == '@') {
-                atAmount++;
+    public Customer getCustomerById(long id) throws CustomerException {
+            if (id <= 0 || !customersById.containsKey(id)) {
+                throw CustomerException.customerDoesNotExist();
             }
+
+        return clone(customersById.get(id));
+    }
+
+
+    public void updateCustomer(Customer customer) throws CustomerException {
+        validateUpdatedCustomer(customer);
+        saveCustomer(customer);
+    }
+
+    public void addTicketToCustomer(Ticket ticket){
+        Customer customer = getCustomerById(ticket.getCustomerId());
+        customer.getTicketsBought().add(ticket.getId());
+        customersById.put(customer.getId(), customer);
+    }
+
+    public void removeTicketFromCustomer(Ticket ticket){
+        Customer customer = getCustomerById(ticket.getCustomerId());
+        customer.ticketDeleted(ticket.getId());
+        customersById.put(customer.getId(), customer);
+    }
+
+    public void deleteCustomer(long id) throws IllegalArgumentException {
+        Customer customer = customersById.remove(id);
+        if (customer != null) {
+            List<Long> ticketIds = new ArrayList<>(customer.getTicketsBought());
+            ticketIds.forEach(ticketService::deleteTicket);
         }
-        if (atAmount != 1) {
+    }
+
+    public List<Customer> getAllCustomers() {
+        return new ArrayList<>(customersById.values());
+    }
+
+    public void deleteAllCustomers() {
+        customersById.clear();
+        ticketService.deleteAllTickets();
+    }
+
+    private void validateCustomer(Customer customer){
+        if (LocalDate.now().minusYears(18).isBefore(customer.getDateOfBirth())) {
+            throw CustomerException.customerUnder18();
+        }
+
+        if (
+            !customer.getEmail().contains("@") ||
+            customer.getEmail().indexOf("@") !=
+            customer.getEmail().lastIndexOf("@") ||
+            !(customer.getEmail().lastIndexOf(".") >
+            customer.getEmail().indexOf("@"))
+        ) {
             throw CustomerException.invalidEmail();
         }
     }
 
-    @Override
-    public Customer createCustomer(String username, String email, LocalDate dateOfBirth) throws CustomerException {
-        validateAdult(dateOfBirth);
-        validateEmail(email);
-
-        UUID id = UUID.randomUUID();
-        final Customer newCustomer = new Customer(id, username, email, dateOfBirth);
-
-        customers.put(id, newCustomer);
-        return getCustomerById(id);
+    private void validateUpdatedCustomer(Customer updatedCustomer) throws CustomerException {
+        getCustomerById(updatedCustomer.getId());
     }
-    
-    @Override
-    public Customer getCustomerById(UUID id) throws CustomerException {
-        if (!customers.containsKey(id)) {
-            throw CustomerException.customerDoesNotExist();
-        }
-        Customer customer = customers.get(id);
-        return new Customer(
-            id,
-            customer.getUsername(),
-            customer.getEmail(),
-            customer.getDateOfBirth(),
-            customer.getTicketsBought()
+
+    private void saveCustomer(Customer customer) throws CustomerException{
+        validateCustomer(customer);
+        customersById.put(customer.getId(), clone(customer));
+    }
+
+    private Customer clone(Customer customer){
+        Customer customerClone = new Customer(
+                customer.getId(),
+                customer.getUsername(),
+                customer.getEmail(),
+                customer.getDateOfBirth()
         );
-    }
-
-    @Override
-    public void updateCustomer(Customer customer) throws CustomerException {
-        UUID id = customer.getId();
-        if (!customers.containsKey(id)) {
-            throw CustomerException.customerDoesNotExist();
-        }
-        validateAdult(customer.getDateOfBirth());
-        validateEmail(customer.getEmail());
-        customers.put(id, customer);
-    }
-    
-    @Override
-    public void deleteCustomer(UUID id) throws CustomerException {
-        if (!customers.containsKey(id)) {
-            throw CustomerException.customerDoesNotExist();
-        }
-        Customer customer = getCustomerById(id);
-        for (UUID ticketId : customer.getTicketsBought()) {
-            ticketService.deleteTicket(ticketId);
-        }
-        customers.remove(id);
-    }
-    
-    
-    @Override
-    public List<Customer> getAllCustomers() {
-        return new ArrayList<>(customers.values());
-    }
-    
-    @Override
-    public void deleteAllCustomers() {
-        for (Customer customer : customers.values()) {
-            deleteCustomer(customer.getId());
-        }
-    }
-
-    @Override
-    public void addTicketBought(UUID customerId, UUID ticketId) {
-        Customer customer = getCustomerById(customerId);
-        customer.addTicketBought(ticketId);
-
-        updateCustomer(customer);
-    }
-
-    @Override
-    public void removeTicketBought(UUID customerId, UUID ticketId) {
-        Customer customer = getCustomerById(customerId);
-        customer.removeTicketBought(ticketId);
-
-        updateCustomer(customer);
+        customerClone.getTicketsBought().addAll(customer.getTicketsBought());
+        return customerClone;
     }
 }
